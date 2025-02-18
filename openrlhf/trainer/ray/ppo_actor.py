@@ -266,7 +266,18 @@ class ActorPPOTrainer(PPOTrainer):
         torch.distributed.barrier()
 
 
-@ray.remote(num_gpus=1)
+@ray.remote(
+    num_gpus=1,
+    runtime_env={ "nsight": {
+        "t": "cuda,nvtx,cublas,cublas-verbose,cusparse,cusparse-verbose,cudnn,opengl,opengl-annotations,openacc,openmp,osrt,mpi,nvvideo,vulkan,vulkan-annotations,oshmem,ucx",
+        "cuda-memory-usage": "true",
+        "cuda-graph-trace": "graph",
+        "capture-range": "cudaProfilerApi",
+        "capture-range-end": "stop",
+        #"capture-range": "none",
+        "capture-range-end": "stop",
+        "kill": "none"
+    }})
 class ActorModelRayActor(BasePPORole):
     def init_model_from_pretrained(self, strategy: DeepspeedStrategy, pretrain):
         args = strategy.args
@@ -435,6 +446,7 @@ class ActorModelRayActor(BasePPORole):
         strategy = self.strategy
         args = self.strategy.args
 
+        torch.cuda.profiler.start()
         # configure Trainer
         trainer = ActorPPOTrainer(
             strategy,
@@ -491,6 +503,7 @@ class ActorModelRayActor(BasePPORole):
             self.consumed_samples,
             self.num_update_steps_per_episodes,
         )
+        torch.cuda.profiler.stop()
 
     def save_model(self):
         args = self.strategy.args

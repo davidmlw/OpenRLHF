@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import nvtx
 
 from openrlhf.models import Actor, GPTLMLoss, PolicyLoss, ValueLoss
 from openrlhf.models.utils import masked_mean
@@ -332,6 +333,7 @@ class PPOTrainer(ABC):
             status.update(self.training_step_critic(experience))
         return status
 
+    @nvtx.annotate()
     def training_step_actor(self, experience: Experience) -> Dict[str, float]:
         self.actor.train()
 

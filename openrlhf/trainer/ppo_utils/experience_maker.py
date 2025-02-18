@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple, Union
 import ray
 import torch
 import torch.nn as nn
+import nvtx
 from tqdm import tqdm
 
 from openrlhf.models.actor import Actor
@@ -202,6 +203,7 @@ class NaiveExperienceMaker(ABC):
         ):
             experiences.append(self.make_experience(samples).to_device("cpu"))
 
+        nvtx_advantage = nvtx.start_range(message="advantages", color="blue")
         experiences, rewards = self.process_experiences(experiences)
 
         # calculate return and advantages
@@ -235,6 +237,7 @@ class NaiveExperienceMaker(ABC):
                 experience.advantages = deepcopy(experience.returns)
             else:
                 raise Exception(f"Unkown advantage_estimator {self.advantage_estimator}")
+            nvtx.end_range(nvtx_advantage)
 
             # calculate the return info.
             if not getattr(self, "packing_samples", False):
@@ -512,6 +515,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 self._ref = self.critic.append.remote(experience_cpu)
         return experiences
 
+    @nvtx.annotate()
     @torch.no_grad()
     def generate_samples(self, all_prompts: List[str], **generate_kwargs) -> List[Samples]:
         """
@@ -535,6 +539,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 ray.get(refs)
         return samples
 
+    @nvtx.annotate()
     @torch.no_grad()
     def make_experience(self, samples: Samples) -> Experience:
         """
@@ -558,6 +563,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
         )
 
         # init log probs
+        nvtx_reference = nvtx.start_range(message="reference logits", color="blue")
         base_action_log_probs_ref = self.initial_model.forward.remote(
             sequences_cpu, num_actions, attention_mask_cpu, packed_seq_lens=packed_seq_lens
         )
@@ -567,6 +573,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             ray.get([self.initial_model.empty_cache.remote()])
 
         # values
+        nvtx_critic = nvtx.start_range(message="critic values", color="blue")
         if self.critic is not None:
             value_ref = self.critic.forward.remote(
                 sequences_cpu, num_actions, attention_mask_cpu, packed_seq_lens=packed_seq_lens
@@ -614,14 +621,19 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             ray.get([self.reward_model[0].empty_cache.remote()])
 
         # log probs
+        nvtx_actor = nvtx.start_range(message="actor logits", color="blue")
         action_log_probs = self.actor(sequences, num_actions, attention_mask, packed_seq_lens=packed_seq_lens)
         actor_value_rm_time = time.time() - start
+        nvtx.end_range(nvtx_actor)
 
         # wait initial/critic/reward model done
         start = time.time()
         ref_values = ray.get([base_action_log_probs_ref, value_ref] + r_refs)
+        nvtx.end_range(nvtx_reference)
+        nvtx.end_range(nvtx_critic)
         wait_time = time.time() - start
 
+        nvtx_reward = nvtx.start_range(message="reward values", color="blue")
         base_action_log_probs, value, rewards = ref_values[0], ref_values[1], ref_values[2:]
         base_action_log_probs = base_action_log_probs.to(device)
         if value is not None:
@@ -669,6 +681,8 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             self.perf_stats["actor_value_rm_time"] += actor_value_rm_time
             self.perf_stats["wait_time"] += wait_time
 
+        nvtx.end_range(nvtx_reward)
+
         experience = Experience(
             sequences,
             action_log_probs,
@@ -707,6 +721,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             min_tokens=kwargs.get("min_new_tokens", 1),
             skip_special_tokens=kwargs.get("skip_special_tokens", False),
             include_stop_str_in_output=True,
+            ignore_eos=True
         )
 
         # Expand prompt list based on the number of samples per prompt

@@ -4,6 +4,7 @@ from typing import Dict, Optional, Union
 
 import ray
 import torch
+import nvtx
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers.trainer import get_scheduler
@@ -61,9 +62,21 @@ class CriticPPOTrainer(PPOTrainer):
         return self.training_step_critic(experience)
 
 
-@ray.remote(num_gpus=1)
+@ray.remote(
+    num_gpus=1,
+    runtime_env={ "nsight": {
+        "t": "cuda,nvtx,cublas,cublas-verbose,cusparse,cusparse-verbose,cudnn,opengl,opengl-annotations,openacc,openmp,osrt,mpi,nvvideo,vulkan,vulkan-annotations,oshmem,ucx",
+        "cuda-memory-usage": "true",
+        "cuda-graph-trace": "graph",
+        "capture-range": "cudaProfilerApi",
+        "capture-range-end": "repeat:2",
+        #"capture-range": "none",
+        #"capture-range-end": "stop",
+        "kill": "none"
+    }})
 class CriticModelRayActor(BasePPORole):
     def init_model_from_pretrained(self, strategy: DeepspeedStrategy, pretrain, max_steps):
+
         args = strategy.args
 
         self._setup_distributed(strategy)
@@ -155,6 +168,8 @@ class CriticModelRayActor(BasePPORole):
         packed_seq_lens=None,
     ) -> torch.Tensor:
         """Generates critic values."""
+        torch.cuda.profiler.start()
+        nvtx_critic = nvtx.start_range(message="critic forward", color="blue")
         device = torch.cuda.current_device()
         self.critic.eval()
         with torch.no_grad():
@@ -162,7 +177,10 @@ class CriticModelRayActor(BasePPORole):
                 sequences.to(device), num_actions, attention_mask.to(device), packed_seq_lens=packed_seq_lens
             )
         self.critic.train()  # reset model state
-        return value.to("cpu")
+        result = value.to("cpu")
+        ##torch.cuda.profiler.stop()
+        nvtx.end_range(nvtx_critic)
+        return result
 
     def append(self, experience):
         """Append experience to replay buffer."""
@@ -170,11 +188,15 @@ class CriticModelRayActor(BasePPORole):
 
     def fit(self):
         """Train critic model with the replay buffer."""
+        ##torch.cuda.profiler.start()
+        nvtx_critic = nvtx.start_range(message="critic train", color="blue")
         torch.cuda.empty_cache()
         self.critic.train()
         status = self.trainer.ppo_train()
         self.trainer.replay_buffer.clear()
         torch.cuda.empty_cache()
+        nvtx.end_range(nvtx_critic)
+        torch.cuda.profiler.stop()
         return status
 
     def empty_cache(self) -> None:
