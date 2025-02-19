@@ -27,8 +27,8 @@ function small {
        --vllm_tensor_parallel_size 1
        --vllm_sync_backend nccl
     #   --colocate_actor_ref
-       --pretrain $DATASETDIR/Qwen2.5-3B
-       --critic_pretrain $DATASETDIR/Qwen2.5-3B
+       --pretrain Qwen/Qwen2.5-3B
+       --critic_pretrain Qwen/Qwen2.5-3B
     #   --pretrain OpenRLHF/Llama-3-8b-sft-mixture
     #   --critic_pretrain OpenRLHF/Llama-3-8b-rm-mixture
        --remote_rm_url $WORKDIR/examples/scripts/reward_func.py
@@ -89,7 +89,7 @@ function large {
        --micro_rollout_batch_size 1
        --rollout_batch_size 1024
        --max_samples $len_prompt_data
-       --max_epochs 1
+       --max_epochs 2
        --prompt_max_len 2048
        --generate_max_len 14336
        --zero_stage 1
