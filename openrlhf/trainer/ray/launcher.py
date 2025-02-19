@@ -60,7 +60,13 @@ class BasePPORole(DistributedTorchRayActor):
         raise NotImplementedError()
 
 
-@ray.remote(num_gpus=1)
+@ray.remote(
+    num_gpus=1,
+    runtime_env={ "nsight": {
+        "t": "cuda,nvtx,cublas,cublas-verbose,cusparse,cusparse-verbose,cudnn,opengl,opengl-annotations,openacc,openmp,osrt,mpi,nvvideo,vulkan,vulkan-annotations,oshmem,ucx",
+        "cuda-memory-usage": "true",
+        "cuda-graph-trace": "graph",
+    }})
 class ReferenceModelRayActor(BasePPORole):
     def init_model_from_pretrained(self, strategy: DeepspeedStrategy, pretrain):
         self._setup_distributed(strategy)

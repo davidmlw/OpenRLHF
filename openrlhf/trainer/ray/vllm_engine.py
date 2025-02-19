@@ -18,7 +18,12 @@ def get_all_env_variables():
     return os.environ
 
 
-@ray.remote
+@ray.remote(
+runtime_env={ "nsight": {
+    "t": "cuda,nvtx,cublas,cublas-verbose,cusparse,cusparse-verbose,cudnn,opengl,opengl-annotations,openacc,openmp,osrt,mpi,nvvideo,vulkan,vulkan-annotations,oshmem,ucx",
+    "cuda-memory-usage": "true",
+    "cuda-graph-trace": "graph",
+}})
 class LLMRayActor:
 
     def __init__(self, *args, bundle_indices: list = None, **kwargs):
