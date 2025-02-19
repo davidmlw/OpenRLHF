@@ -128,3 +128,6 @@ then
 else
     echo "'$1' is not a known function name" >&2
 fi
+
+
+# git@hf.co:Qwen/Qwen2.5-3B
