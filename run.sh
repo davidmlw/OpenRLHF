@@ -32,13 +32,13 @@ function small {
     #   --pretrain OpenRLHF/Llama-3-8b-sft-mixture
     #   --critic_pretrain OpenRLHF/Llama-3-8b-rm-mixture
        --remote_rm_url $WORKDIR/examples/scripts/reward_func.py
-       --micro_train_batch_size 1
+       --micro_train_batch_size 2
     #   --train_batch_size 256
        --train_batch_size 16
        --micro_rollout_batch_size 1
     #   --rollout_batch_size 1024
-       --rollout_batch_size 64
-       --max_samples $len_prompt_data
+       --rollout_batch_size 32
+       --max_samples 32
        --max_epochs 1
     #   --prompt_max_len 2048
        --prompt_max_len 256
@@ -86,12 +86,16 @@ function large {
        --remote_rm_url $WORKDIR/examples/scripts/reward_func.py
        --micro_train_batch_size 1
        --train_batch_size 256
-       --micro_rollout_batch_size 1
+       --micro_rollout_batch_size 2
        --rollout_batch_size 1024
        --max_samples $len_prompt_data
-       --max_epochs 2
+       --num_episodes 1
+       --max_epochs 1
        --prompt_max_len 2048
        --generate_max_len 14336
+#       --generate_max_len 4096
+#       --generate_max_len 8192
+#       --generate_max_len 2048
        --zero_stage 1
        --bf16
        --actor_learning_rate 5e-7
