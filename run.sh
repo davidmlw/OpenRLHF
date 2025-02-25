@@ -81,12 +81,13 @@ function large {
        --vllm_tensor_parallel_size 1
        --vllm_sync_backend nccl
        --colocate_actor_ref
+#       --colocate_all_models
        --pretrain $DATASETDIR/Qwen2.5-3B
        --critic_pretrain $DATASETDIR/Qwen2.5-3B
        --remote_rm_url $WORKDIR/examples/scripts/reward_func.py
        --micro_train_batch_size 1
        --train_batch_size 256
-       --micro_rollout_batch_size 2
+       --micro_rollout_batch_size 1
        --rollout_batch_size 1024
        --max_samples $len_prompt_data
        --num_episodes 1
