@@ -117,6 +117,7 @@ function large {
        --load_checkpoint
     )
 
+    #python3 -m nvtx openrlhf/cli/train_ppo_ray.py ${train_args[@]}
     python3 -m openrlhf.cli.train_ppo_ray ${train_args[@]}
 }
 

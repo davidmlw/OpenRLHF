@@ -66,6 +66,11 @@ class BasePPORole(DistributedTorchRayActor):
         "t": "cuda,nvtx,cublas,cublas-verbose,cusparse,cusparse-verbose,cudnn,opengl,opengl-annotations,openacc,openmp,osrt,mpi,nvvideo,vulkan,vulkan-annotations,oshmem,ucx",
         "cuda-memory-usage": "true",
         "cuda-graph-trace": "graph",
+        "capture-range": "cudaProfilerApi",
+        "capture-range-end": "stop",
+        #"capture-range": "none",
+        #"capture-range-end": "stop",
+        "kill": "none"
     }})
 class ReferenceModelRayActor(BasePPORole):
     def init_model_from_pretrained(self, strategy: DeepspeedStrategy, pretrain):
@@ -94,6 +99,7 @@ class ReferenceModelRayActor(BasePPORole):
         return_output=False,
         packed_seq_lens: Optional[list[int]] = None,
     ) -> torch.Tensor:
+        torch.cuda.profiler.start()
         device = torch.cuda.current_device()
         with torch.no_grad():
             log_probs = self.model(
@@ -103,7 +109,9 @@ class ReferenceModelRayActor(BasePPORole):
                 return_output=return_output,
                 packed_seq_lens=packed_seq_lens,
             )
-        return log_probs.to("cpu")
+        result = log_probs.to("cpu")
+        torch.cuda.profiler.stop()
+        return result
 
     def empty_cache(self) -> None:
         torch.cuda.empty_cache()

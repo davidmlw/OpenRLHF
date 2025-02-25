@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import ray
+import torch
 from ray.util.placement_group import placement_group
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from vllm import LLM
@@ -23,6 +24,11 @@ runtime_env={ "nsight": {
     "t": "cuda,nvtx,cublas,cublas-verbose,cusparse,cusparse-verbose,cudnn,opengl,opengl-annotations,openacc,openmp,osrt,mpi,nvvideo,vulkan,vulkan-annotations,oshmem,ucx",
     "cuda-memory-usage": "true",
     "cuda-graph-trace": "graph",
+    "capture-range": "cudaProfilerApi",
+    "capture-range-end": "stop",
+    #"capture-range": "none",
+    #"capture-range-end": "stop",
+    "kill": "none"
 }})
 class LLMRayActor:
 
@@ -54,6 +60,7 @@ class LLMRayActor:
         )
 
     def update_weight(self, name, dtype, shape, empty_cache=False):
+        print("LLMRayActor::update_weight")
         return self.llm.collective_rpc("update_weight", args=(name, dtype, shape, empty_cache))
 
     def update_weight_cuda_ipc(self, name, dtype, shape, ipc_handles, empty_cache=False):
@@ -72,6 +79,7 @@ class LLMRayActor:
         """
         Save the requests from actors and generate responses when all actors have sent their requests
         """
+        torch.cuda.profiler.start()
         self.requests[actor_rank] = prompt_token_ids
         self.actor_counter += 1
         if self.actor_counter == self.num_actors:
@@ -101,7 +109,9 @@ class LLMRayActor:
         """
         Return the responses for the actor with the given rank
         """
-        return self.responses.pop(actor_rank)
+        result = self.responses.pop(actor_rank)
+        torch.cuda.profiler.stop()
+        return result
 
 
 def create_vllm_engines(
